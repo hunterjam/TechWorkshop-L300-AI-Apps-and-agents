@@ -1,34 +1,40 @@
-name: Deploy to Azure Container Registry
+name: Deploy Inventory Agent
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'src/**'
+      - 'src/app/agents/inventoryAgent_initializer.py'
+      - 'src/prompts/InventoryAgentPrompt.txt'
+      - 'src/app/tools/inventoryCheck.py'
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
 
-env:
-  AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
-  IMAGE_NAME: chat-app
-
 jobs:
-  build-and-deploy:
+  deploy-agent:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Create .env file from secret
         run: echo "$ENV" > src/.env
         shell: bash
         env:
           ENV: ${{ secrets.ENV }}
+
+      - name: Install dependencies
+        run: pip install -r src/requirements.txt
 
       - name: Log in to Azure via OIDC
         uses: azure/login@v2
@@ -37,11 +43,6 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Log in to Azure Container Registry
-        run: az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
-
-      - name: Build and push Docker image
-        run: |
-          cd src/
-          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
-          docker push ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      - name: Deploy Inventory Agent
+        working-directory: src/app/agents
+        run: python inventoryAgent_initializer.py
